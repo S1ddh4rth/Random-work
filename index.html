@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Tracker">
+<meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141414" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Tracker</title>
+<style>
+:root {
+  --bg: #f6f5f2; --card: #fff; --ink: #1b1b1b; --muted: #8a8a85; --line: #e6e4df;
+  --accent: #2f5d50; --accent-ink: #fff; --danger: #a33a3a; --grey: #b9b7b0;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #141414; --card: #1d1d1d; --ink: #f0efeb; --muted: #8d8d88; --line: #2c2c2a;
+          --accent: #6fb59f; --accent-ink: #0e1a16; --danger: #d77; --grey: #5c5c58; }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  padding: env(safe-area-inset-top) 0 calc(72px + env(safe-area-inset-bottom)); }
+main { max-width: 560px; margin: 0 auto; padding: 20px 16px; }
+section { display: none; } section.on { display: block; }
+h1 { font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+.label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stats b { display: block; font-size: 28px; font-weight: 600; letter-spacing: -.02em; margin-top: 2px; }
+.stats small { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 2px; }
+input, button { font: inherit; }
+input[type=text], input[type=number], input[type=password] {
+  width: 100%; padding: 12px; margin: 4px 0 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg); color: var(--ink); font-size: 16px; -webkit-appearance: none; }
+input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.row { display: flex; gap: 10px; } .row > * { flex: 1; min-width: 0; }
+.btn { display: block; width: 100%; padding: 13px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--card); color: var(--ink); text-align: center; cursor: pointer; margin-bottom: 10px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn:disabled { opacity: .5; }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.actions .btn { margin: 0; }
+.hide { display: none !important; }
+.msg { font-size: 14px; color: var(--muted); margin: 0 0 12px; min-height: 1em; }
+.msg.err { color: var(--danger); }
+#preview { width: 100%; max-height: 220px; object-fit: cover; border-radius: 10px; margin-bottom: 12px; }
+.entry { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+.entry:first-child { border-top: 0; }
+.entry small { display: block; color: var(--muted); font-size: 13px; }
+.entry .x { background: none; border: 0; color: var(--muted); font-size: 13px; padding: 8px; }
+.chartbox { height: 190px; position: relative; }
+nav { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: var(--card);
+  border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+nav button { flex: 1; padding: 16px 0; background: none; border: 0; color: var(--muted); font-size: 12px;
+  letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+nav button.on { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <section id="log" class="on">
+    <h1 id="today"></h1>
+    <div class="card stats">
+      <div><span class="label">Energy</span><b id="sKcal">0</b><small>kcal</small></div>
+      <div><span class="label">Protein</span><b id="sProt">0</b><small>g</small></div>
+      <div><span class="label">Weight</span><b id="sWt">&ndash;</b><small>kg</small></div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="showFood">Add food</button>
+      <button class="btn" id="showWt">Log weight</button>
+    </div>
+
+    <form class="card hide" id="foodForm">
+      <label class="btn" for="photo">Take photo (optional)</label>
+      <input type="file" id="photo" accept="image/*" capture="environment" class="hide">
+      <img id="preview" class="hide" alt="">
+      <span class="label">Description</span>
+      <input type="text" id="desc" placeholder="e.g. 2 rotis with paneer curry">
+      <button type="button" class="btn" id="analyze">Estimate with Gemini</button>
+      <p class="msg" id="aMsg"></p>
+      <span class="label">Name</span>
+      <input type="text" id="fName" placeholder="Lunch" required>
+      <div class="row">
+        <div><span class="label">Kcal</span><input type="number" id="fKcal" inputmode="decimal" step="any" min="0" required></div>
+        <div><span class="label">Protein (g)</span><input type="number" id="fProt" inputmode="decimal" step="any" min="0" required></div>
+      </div>
+      <button class="btn primary" type="submit">Save</button>
+      <button class="btn" type="button" data-cancel="foodForm">Cancel</button>
+    </form>
+
+    <form class="card hide" id="wtForm">
+      <span class="label">Message</span>
+      <input type="text" id="wNote" placeholder="Morning, after waking">
+      <span class="label">Weight (kg)</span>
+      <input type="number" id="wKg" inputmode="decimal" step="any" min="0" required>
+      <button class="btn primary" type="submit">Save</button>
+      <button class="btn" type="button" data-cancel="wtForm">Cancel</button>
+    </form>
+
+    <h1>Today</h1>
+    <div class="card" id="entries"></div>
+  </section>
+
+  <section id="trends">
+    <h1>Trends</h1>
+    <div class="card">
+      <span class="label">Last N days</span>
+      <input type="number" id="days" inputmode="numeric" min="1" max="365">
+    </div>
+    <div class="card"><span class="label">Energy per day (kcal)</span><div class="chartbox"><canvas id="cKcal"></canvas></div></div>
+    <div class="card"><span class="label">Protein per day (g)</span><div class="chartbox"><canvas id="cProt"></canvas></div></div>
+    <div class="card"><span class="label">Weight (kg): daily average and first reading</span><div class="chartbox"><canvas id="cWt"></canvas></div></div>
+  </section>
+
+  <section id="settings">
+    <h1>Settings</h1>
+    <div class="card">
+      <span class="label">Gemini API key</span>
+      <input type="password" id="key" autocomplete="off" autocapitalize="off">
+      <span class="label">Model</span>
+      <input type="text" id="model" autocapitalize="off">
+      <button class="btn primary" id="saveSet">Save</button>
+      <p class="msg" id="setMsg">Stored only on this device.</p>
+    </div>
+    <div class="card">
+      <span class="label">Backup</span>
+      <button class="btn" id="export" style="margin-top:8px">Export data</button>
+      <label class="btn" for="import">Import data</label>
+      <input type="file" id="import" accept="application/json" class="hide">
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button data-tab="log" class="on">Log</button>
+  <button data-tab="trends">Trends</button>
+  <button data-tab="settings">Settings</button>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+const $ = id => document.getElementById(id);
+const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+let foods = load('foods', []), weights = load('weights', []);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const pad = n => String(n).padStart(2, '0');
+const dkey = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const r1 = n => Math.round(n * 10) / 10;
+
+// Per-day totals for the last n days (oldest first). Missing data => null.
+function daily(n, now = new Date()) {
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const k = dkey(d);
+    const f = foods.filter(e => dkey(new Date(e.ts)) === k);
+    const w = weights.filter(e => dkey(new Date(e.ts)) === k).sort((a, b) => a.ts.localeCompare(b.ts));
+    out.push({
+      k, d,
+      kcal: f.length ? f.reduce((s, e) => s + e.kcal, 0) : null,
+      prot: f.length ? f.reduce((s, e) => s + e.protein, 0) : null,
+      avg: w.length ? w.reduce((s, e) => s + e.kg, 0) / w.length : null,
+      first: w.length ? w[0].kg : null,
+    });
+  }
+  return out;
+}
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button, section').forEach(e => e.classList.remove('on'));
+  b.classList.add('on'); $(b.dataset.tab).classList.add('on');
+  if (b.dataset.tab === 'trends') drawCharts();
+});
+
+/* ---------- log ---------- */
+function renderLog() {
+  const t = daily(1)[0];
+  $('today').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+  $('sKcal').textContent = Math.round(t.kcal ?? 0);
+  $('sProt').textContent = r1(t.prot ?? 0);
+  $('sWt').textContent = t.avg == null ? '–' : r1(t.avg);
+  const k = dkey(new Date());
+  const items = [
+    ...foods.map(e => ({ ...e, type: 'f' })), ...weights.map(e => ({ ...e, type: 'w' })),
+  ].filter(e => dkey(new Date(e.ts)) === k).sort((a, b) => b.ts.localeCompare(a.ts));
+  $('entries').innerHTML = items.length ? '' : '<span class="label">Nothing logged yet</span>';
+  for (const e of items) {
+    const div = document.createElement('div'); div.className = 'entry';
+    const time = new Date(e.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const [title, sub] = e.type === 'f'
+      ? [e.name, `${Math.round(e.kcal)} kcal  ·  ${r1(e.protein)} g protein  ·  ${time}`]
+      : [e.note || 'Weight', `${r1(e.kg)} kg  ·  ${time}`];
+    const l = document.createElement('div'); const s = document.createElement('small');
+    l.append(title, s); s.textContent = sub;
+    const x = document.createElement('button'); x.className = 'x'; x.textContent = 'Delete';
+    x.onclick = () => {
+      if (!confirm('Delete this entry?')) return;
+      if (e.type === 'f') { foods = foods.filter(z => z.id !== e.id); save('foods', foods); }
+      else { weights = weights.filter(z => z.id !== e.id); save('weights', weights); }
+      renderLog();
+    };
+    div.append(l, x); $('entries').append(div);
+  }
+}
+const toggle = (id, on) => $(id).classList.toggle('hide', !on);
+$('showFood').onclick = () => { toggle('wtForm', false); toggle('foodForm', true); };
+$('showWt').onclick = () => { toggle('foodForm', false); toggle('wtForm', true); };
+document.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () => toggle(b.dataset.cancel, false));
+
+$('foodForm').onsubmit = e => {
+  e.preventDefault();
+  foods.push({ id: uid(), name: $('fName').value.trim(), kcal: +$('fKcal').value, protein: +$('fProt').value, ts: new Date().toISOString() });
+  save('foods', foods);
+  e.target.reset(); photoData = null; toggle('preview', false); $('aMsg').textContent = '';
+  toggle('foodForm', false); renderLog();
+};
+$('wtForm').onsubmit = e => {
+  e.preventDefault();
+  weights.push({ id: uid(), note: $('wNote').value.trim(), kg: +$('wKg').value, ts: new Date().toISOString() });
+  save('weights', weights); e.target.reset(); toggle('wtForm', false); renderLog();
+};
+
+/* ---------- photo + Gemini ---------- */
+let photoData = null; // base64 JPEG, no prefix
+$('photo').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = new Image(); img.src = URL.createObjectURL(f);
+  try { await img.decode(); } catch { setMsg('aMsg', 'Could not read that photo.', true); return; }
+  const s = Math.min(1, 1024 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas'); c.width = img.width * s; c.height = img.height * s;
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  const url = c.toDataURL('image/jpeg', .8);
+  photoData = url.split(',')[1]; $('preview').src = url; toggle('preview', true);
+};
+function setMsg(id, t, err) { $(id).textContent = t; $(id).classList.toggle('err', !!err); }
+
+const NUM = { type: 'NUMBER' };
+const SCHEMA = {
+  type: 'OBJECT',
+  properties: { name: { type: 'STRING' }, kcal: NUM, protein_g: NUM, kcal_low: NUM, kcal_high: NUM, protein_low: NUM, protein_high: NUM },
+  required: ['name', 'kcal', 'protein_g', 'kcal_low', 'kcal_high', 'protein_low', 'protein_high'],
+};
+$('analyze').onclick = async () => {
+  const key = localStorage.getItem('apiKey'), model = localStorage.getItem('model') || 'gemini-3.8-flash';
+  const desc = $('desc').value.trim();
+  if (!key) return setMsg('aMsg', 'Add your API key in Settings first.', true);
+  if (!photoData && !desc) return setMsg('aMsg', 'Add a photo or a description.', true);
+  const btn = $('analyze'); btn.disabled = true; setMsg('aMsg', 'Estimating...');
+  const text = `How many Kcal and protein in this food item: ${desc || '(see photo)'}\n` +
+    `Estimate for the whole portion described or shown. Respond only with the JSON object. ` +
+    `kcal and protein_g are your single best estimates (plain numbers, no ranges, no units). ` +
+    `kcal_low/kcal_high and protein_low/protein_high bound the plausible range (equal to the estimate if confident). ` +
+    `name is a short dish name.`;
+  const parts = [...(photoData ? [{ inline_data: { mime_type: 'image/jpeg', data: photoData } }] : []), { text }];
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA } }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error?.message || r.status);
+    const raw = (j.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text).join('');
+    const o = JSON.parse(raw);
+    const mid = (a, b) => (+a + +b) / 2;
+    const kcal = Number.isFinite(+o.kcal) ? +o.kcal : mid(o.kcal_low, o.kcal_high);
+    const prot = Number.isFinite(+o.protein_g) ? +o.protein_g : mid(o.protein_low, o.protein_high);
+    if (!Number.isFinite(kcal) || !Number.isFinite(prot)) throw new Error('Unreadable response');
+    $('fKcal').value = Math.round(kcal); $('fProt').value = r1(prot);
+    if (!$('fName').value) $('fName').value = o.name || '';
+    setMsg('aMsg', `Range: ${Math.round(o.kcal_low)}–${Math.round(o.kcal_high)} kcal, ${r1(o.protein_low)}–${r1(o.protein_high)} g protein. Edit below if needed.`);
+  } catch (err) {
+    setMsg('aMsg', `Failed: ${err.message}. You can enter values manually.`, true);
+  }
+  btn.disabled = false;
+};
+
+/* ---------- trends ---------- */
+$('days').value = load('days', 7);
+$('days').onchange = () => { save('days', Math.max(1, Math.min(365, +$('days').value || 7))); $('days').value = load('days', 7); drawCharts(); };
+const charts = [];
+function drawCharts() {
+  charts.splice(0).forEach(c => c.destroy());
+  const cs = getComputedStyle(document.documentElement);
+  const accent = cs.getPropertyValue('--accent').trim(), grey = cs.getPropertyValue('--grey').trim(), muted = cs.getPropertyValue('--muted').trim();
+  const data = daily(load('days', 7));
+  const labels = data.map(x => x.d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }));
+  const opts = (legend) => ({
+    maintainAspectRatio: false, spanGaps: true,
+    plugins: { legend: { display: legend, labels: { color: muted, boxWidth: 10 } } },
+    scales: { x: { grid: { display: false }, ticks: { color: muted, maxTicksLimit: 7 } }, y: { grid: { color: 'rgba(128,128,128,.15)' }, ticks: { color: muted } } },
+  });
+  const bar = (id, key) => charts.push(new Chart($(id), { type: 'bar', data: { labels, datasets: [{ data: data.map(x => x[key] == null ? null : r1(x[key])), backgroundColor: accent, borderRadius: 4 }] }, options: opts(false) }));
+  bar('cKcal', 'kcal'); bar('cProt', 'prot');
+  const line = (label, key, color) => ({ label, data: data.map(x => x[key] == null ? null : r1(x[key])), borderColor: color, backgroundColor: color, tension: .25, pointRadius: 3 });
+  const wo = opts(true); wo.scales.y.beginAtZero = false;
+  charts.push(new Chart($('cWt'), { type: 'line', data: { labels, datasets: [line('Average', 'avg', accent), line('First reading', 'first', grey)] }, options: wo }));
+}
+
+/* ---------- settings ---------- */
+$('key').value = localStorage.getItem('apiKey') || '';
+$('model').value = localStorage.getItem('model') || 'gemini-3.8-flash';
+$('saveSet').onclick = () => {
+  localStorage.setItem('apiKey', $('key').value.trim()); localStorage.setItem('model', $('model').value.trim() || 'gemini-3.8-flash');
+  setMsg('setMsg', 'Saved.');
+};
+$('export').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify({ foods, weights })], { type: 'application/json' }));
+  a.download = `tracker-${dkey(new Date())}.json`; a.click();
+};
+$('import').onchange = async e => {
+  try {
+    const o = JSON.parse(await e.target.files[0].text());
+    if (!Array.isArray(o.foods) || !Array.isArray(o.weights)) throw 0;
+    if (!confirm('Replace all data on this device with the file contents?')) return;
+    foods = o.foods; weights = o.weights; save('foods', foods); save('weights', weights);
+    renderLog(); setMsg('setMsg', 'Imported.');
+  } catch { setMsg('setMsg', 'Not a valid backup file.', true); }
+};
+
+/* ---------- self-check: open index.html#test and look at the console ---------- */
+if (location.hash === '#test') {
+  const [f0, w0] = [foods, weights];
+  const at = (h, m = 0) => new Date(2026, 0, 10, h, m).toISOString();
+  foods = [{ kcal: 100, protein: 5, ts: at(8) }, { kcal: 200, protein: 10, ts: at(23, 59) }, { kcal: 50, protein: 1, ts: new Date(2026, 0, 11, 0, 1).toISOString() }];
+  weights = [{ kg: 80, ts: at(18) }, { kg: 82, ts: at(7) }];
+  const [a, b] = daily(2, new Date(2026, 0, 11, 12));
+  console.assert(a.kcal === 300 && a.prot === 15, 'sums');
+  console.assert(b.kcal === 50 && b.avg === null, 'next day split at midnight, no weight');
+  console.assert(a.avg === 81 && a.first === 82, 'avg and first-of-day by time, not insertion order');
+  console.log('self-check done'); foods = f0; weights = w0;
+}
+
+renderLog();
+</script>
+</body>
+</html>

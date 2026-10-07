@@ -1,0 +1,9 @@
+{
+  "name": "Tracker",
+  "short_name": "Tracker",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f6f5f2",
+  "theme_color": "#2f5d50",
+  "icons": [{ "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }]
+}
